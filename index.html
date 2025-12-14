@@ -24,14 +24,14 @@ body {
 .card {
     background: #1e293b;
     padding: 15px;
-    border-radius: 10px;
+    border-radius: 12px;
     margin-top: 20px;
 }
 input, button {
     width: 100%;
     padding: 10px;
     margin-top: 8px;
-    border-radius: 5px;
+    border-radius: 6px;
     border: none;
 }
 button {
@@ -39,19 +39,36 @@ button {
     font-weight: bold;
     cursor: pointer;
 }
+button:hover {
+    background: #16a34a;
+}
 #chat { display: none; }
+
 #mensagens {
-    height: 200px;
+    height: 240px;
     overflow-y: auto;
     background: #020617;
     padding: 10px;
-    border-radius: 5px;
+    border-radius: 8px;
 }
+
+.msg {
+    margin-bottom: 8px;
+    padding: 6px;
+    background: #1e293b;
+    border-radius: 6px;
+}
+
+.hora {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
 .friend {
     background: #334155;
-    padding: 5px;
+    padding: 6px;
     margin-top: 5px;
-    border-radius: 5px;
+    border-radius: 6px;
 }
 </style>
 </head>
@@ -61,7 +78,8 @@ button {
 <div class="container">
 
 <div class="card" id="loginCard">
-    <h2>Login</h2>
+    <h2>Login / Cadastro</h2>
+    <input id="nome" placeholder="Nome de usuário">
     <input id="email" placeholder="Email">
     <input id="senha" type="password" placeholder="Senha (mín. 6)">
     <button onclick="entrar()">Entrar</button>
@@ -69,7 +87,7 @@ button {
 </div>
 
 <div class="card" id="chat">
-    <h3 id="userEmail"></h3>
+    <h3 id="userNome"></h3>
     <button onclick="sair()">Sair</button>
 
     <h4>Amigos</h4>
@@ -86,7 +104,7 @@ button {
 </div>
 
 <script>
-// 🔥 CONFIGURAÇÃO CORRETA DO FIREBASE
+// 🔥 FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyDdEzkTOfqlh05D_ls0juTNAlALyc8bFxI",
   authDomain: "mini-chat-4c58f.firebaseapp.com",
@@ -97,23 +115,33 @@ const firebaseConfig = {
   appId: "1:541279607046:web:7fe7064bae40bffe64a687"
 };
 
-// INICIALIZA
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.database();
 
 let uid = "";
+let nomeUsuario = "";
 
-// LOGIN
+// ENTRAR
 function entrar() {
   auth.signInWithEmailAndPassword(email.value, senha.value)
     .catch(e => alert(e.message));
 }
 
-// CADASTRO
+// CADASTRAR
 function cadastrar() {
+  if (nome.value === "") {
+    alert("Digite um nome de usuário");
+    return;
+  }
+
   auth.createUserWithEmailAndPassword(email.value, senha.value)
+    .then(res => {
+      db.ref("usuarios/" + res.user.uid).set({
+        nome: nome.value
+      });
+    })
     .catch(e => alert(e.message));
 }
 
@@ -123,7 +151,12 @@ auth.onAuthStateChanged(user => {
     uid = user.uid;
     loginCard.style.display = "none";
     chat.style.display = "block";
-    userEmail.innerText = user.email;
+
+    db.ref("usuarios/" + uid).once("value").then(snap => {
+      nomeUsuario = snap.val().nome;
+      userNome.innerText = "Olá, " + nomeUsuario;
+    });
+
     carregarMensagens();
     carregarAmigos();
   }
@@ -134,13 +167,20 @@ function sair() {
   auth.signOut().then(() => location.reload());
 }
 
-// ENVIAR MENSAGEM
+// ENVIAR MENSAGEM COM HORÁRIO
 function enviar() {
   if (msg.value === "") return;
+
+  const agora = new Date();
+  const hora = agora.getHours().toString().padStart(2, "0");
+  const minuto = agora.getMinutes().toString().padStart(2, "0");
+
   db.ref("mensagens").push({
-    user: auth.currentUser.email,
-    texto: msg.value
+    user: nomeUsuario,
+    texto: msg.value,
+    hora: `${hora}:${minuto}`
   });
+
   msg.value = "";
 }
 
@@ -149,7 +189,12 @@ function carregarMensagens() {
   mensagens.innerHTML = "";
   db.ref("mensagens").on("child_added", s => {
     let m = s.val();
-    mensagens.innerHTML += `<p><b>${m.user}:</b> ${m.texto}</p>`;
+    mensagens.innerHTML += `
+      <div class="msg">
+        <b>${m.user}</b>: ${m.texto}
+        <div class="hora">${m.hora}</div>
+      </div>
+    `;
     mensagens.scrollTop = mensagens.scrollHeight;
   });
 }
@@ -171,4 +216,3 @@ function carregarAmigos() {
 
 </body>
 </html>
-
