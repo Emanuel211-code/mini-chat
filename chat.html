@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Chat Online</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+}
+
+.container {
+    max-width: 400px;
+    margin: auto;
+    padding: 20px;
+}
+
+.card {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 20px;
+}
+
+input, button {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 5px;
+    border: none;
+}
+
+button {
+    background: #22c55e;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#chat { display: none; }
+
+#mensagens {
+    height: 200px;
+    overflow-y: auto;
+    background: #020617;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.friend {
+    background: #334155;
+    padding: 5px;
+    margin-top: 5px;
+    border-radius: 5px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<!-- LOGIN -->
+<div class="card" id="loginCard">
+    <h2>Login</h2>
+    <input id="email" placeholder="Email">
+    <input id="senha" type="password" placeholder="Senha (mín. 6)">
+    <button onclick="entrar()">Entrar</button>
+    <button onclick="cadastrar()">Cadastrar</button>
+</div>
+
+<!-- CHAT -->
+<div class="card" id="chat">
+    <h3 id="user"></h3>
+    <button onclick="sair()">Sair</button>
+
+    <h4>Amigos</h4>
+    <input id="emailAmigo" placeholder="Email do amigo">
+    <button onclick="addAmigo()">Adicionar amigo</button>
+    <div id="listaAmigos"></div>
+
+    <h4>Chat público</h4>
+    <div id="mensagens"></div>
+    <input id="msg" placeholder="Mensagem">
+    <button onclick="enviar()">Enviar</button>
+</div>
+
+</div>
+
+<script>
+// 🔑 COLE SUA CONFIGURAÇÃO DO FIREBASE
+const firebaseConfig = {
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_PROJETO.firebaseapp.com",
+  databaseURL: "https://SEU_PROJETO-default-rtdb.firebaseio.com",
+  projectId: "SEU_PROJETO",
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.database();
+
+let usuarioID = "";
+
+// LOGIN
+function entrar() {
+  auth.signInWithEmailAndPassword(email.value, senha.value)
+  .catch(e => alert(e.message));
+}
+
+// CADASTRO
+function cadastrar() {
+  auth.createUserWithEmailAndPassword(email.value, senha.value)
+  .catch(e => alert(e.message));
+}
+
+// QUANDO LOGAR
+auth.onAuthStateChanged(user => {
+  if(user) {
+    usuarioID = user.uid;
+    loginCard.style.display = "none";
+    chat.style.display = "block";
+    user.innerText = user.email;
+
+    carregarMensagens();
+    carregarAmigos();
+  }
+});
+
+// SAIR
+function sair() {
+  auth.signOut();
+  location.reload();
+}
+
+// ENVIAR MSG
+function enviar() {
+  if(msg.value == "") return;
+
+  db.ref("mensagens").push({
+    user: auth.currentUser.email,
+    texto: msg.value
+  });
+
+  msg.value = "";
+}
+
+// CARREGAR MSGS
+function carregarMensagens() {
+  mensagens.innerHTML = "";
+  db.ref("mensagens").on("child_added", snap => {
+    let m = snap.val();
+    mensagens.innerHTML += `<p><b>${m.user}:</b> ${m.texto}</p>`;
+    mensagens.scrollTop = mensagens.scrollHeight;
+  });
+}
+
+// ADICIONAR AMIGO
+function addAmigo() {
+  if(emailAmigo.value == "") return;
+
+  db.ref("amigos/" + usuarioID).push(emailAmigo.value);
+  emailAmigo.value = "";
+}
+
+// CARREGAR AMIGOS
+function carregarAmigos() {
+  listaAmigos.innerHTML = "";
+  db.ref("amigos/" + usuarioID).on("child_added", snap => {
+    listaAmigos.innerHTML += `<div class="friend">${snap.val()}</div>`;
+  });
+}
+</script>
+
+</body>
+</html>
+
