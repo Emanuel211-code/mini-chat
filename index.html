@@ -19,19 +19,19 @@ body {
 .container {
     max-width: 420px;
     margin: auto;
-    padding: 20px;
+    padding: 10px;
 }
 .card {
     background: #1e293b;
-    padding: 15px;
+    padding: 12px;
     border-radius: 12px;
-    margin-top: 20px;
+    margin-top: 10px;
 }
 input, button {
     width: 100%;
     padding: 10px;
-    margin-top: 8px;
-    border-radius: 6px;
+    margin-top: 6px;
+    border-radius: 20px;
     border: none;
 }
 button {
@@ -39,36 +39,43 @@ button {
     font-weight: bold;
     cursor: pointer;
 }
-button:hover {
-    background: #16a34a;
-}
 #chat { display: none; }
 
+.friend {
+    padding: 10px;
+    background: #334155;
+    border-radius: 8px;
+    margin-top: 5px;
+    cursor: pointer;
+}
+
+.friend.online {
+    border-left: 4px solid #22c55e;
+}
+
 #mensagens {
-    height: 240px;
+    height: 260px;
     overflow-y: auto;
     background: #020617;
     padding: 10px;
-    border-radius: 8px;
+    border-radius: 12px;
 }
 
 .msg {
-    margin-bottom: 8px;
-    padding: 6px;
     background: #1e293b;
-    border-radius: 6px;
+    padding: 8px;
+    border-radius: 10px;
+    margin-bottom: 6px;
 }
 
 .hora {
-    font-size: 11px;
+    font-size: 10px;
     color: #94a3b8;
 }
 
-.friend {
-    background: #334155;
-    padding: 6px;
-    margin-top: 5px;
-    border-radius: 6px;
+.status {
+    font-size: 12px;
+    color: #22c55e;
 }
 </style>
 </head>
@@ -81,38 +88,33 @@ button:hover {
     <h2>Login / Cadastro</h2>
     <input id="nome" placeholder="Nome de usuário">
     <input id="email" placeholder="Email">
-    <input id="senha" type="password" placeholder="Senha (mín. 6)">
+    <input id="senha" type="password" placeholder="Senha">
     <button onclick="entrar()">Entrar</button>
     <button onclick="cadastrar()">Cadastrar</button>
 </div>
 
 <div class="card" id="chat">
     <h3 id="userNome"></h3>
+    <div class="status" id="statusAmigo"></div>
     <button onclick="sair()">Sair</button>
 
     <h4>Amigos</h4>
-    <input id="emailAmigo" placeholder="Email do amigo">
-    <button onclick="addAmigo()">Adicionar</button>
     <div id="listaAmigos"></div>
 
-    <h4>Chat público</h4>
+    <h4 id="tituloChat">Selecione um amigo</h4>
     <div id="mensagens"></div>
-    <input id="msg" placeholder="Mensagem">
+    <input id="msg" placeholder="Mensagem" oninput="digitando()">
     <button onclick="enviar()">Enviar</button>
 </div>
 
 </div>
 
 <script>
-// 🔥 FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyDdEzkTOfqlh05D_ls0juTNAlALyc8bFxI",
   authDomain: "mini-chat-4c58f.firebaseapp.com",
   databaseURL: "https://mini-chat-4c58f-default-rtdb.firebaseio.com",
-  projectId: "mini-chat-4c58f",
-  storageBucket: "mini-chat-4c58f.appspot.com",
-  messagingSenderId: "541279607046",
-  appId: "1:541279607046:web:7fe7064bae40bffe64a687"
+  projectId: "mini-chat-4c58f"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -122,72 +124,69 @@ const db = firebase.database();
 
 let uid = "";
 let nomeUsuario = "";
+let amigoEmail = "";
+let chatId = "";
 
-// ENTRAR
+// LOGIN
 function entrar() {
-  auth.signInWithEmailAndPassword(email.value, senha.value)
-    .catch(e => alert(e.message));
+  auth.signInWithEmailAndPassword(email.value, senha.value);
 }
 
-// CADASTRAR
+// CADASTRO
 function cadastrar() {
-  if (nome.value === "") {
-    alert("Digite um nome de usuário");
-    return;
-  }
-
-  auth.createUserWithEmailAndPassword(email.value, senha.value)
-    .then(res => {
-      db.ref("usuarios/" + res.user.uid).set({
-        nome: nome.value
-      });
-    })
-    .catch(e => alert(e.message));
+  auth.createUserWithEmailAndPassword(email.value, senha.value).then(res => {
+    db.ref("usuarios/" + res.user.uid).set({
+      nome: nome.value,
+      online: true
+    });
+  });
 }
 
-// USUÁRIO LOGADO
+// STATUS ONLINE
 auth.onAuthStateChanged(user => {
   if (user) {
     uid = user.uid;
     loginCard.style.display = "none";
     chat.style.display = "block";
 
-    db.ref("usuarios/" + uid).once("value").then(snap => {
-      nomeUsuario = snap.val().nome;
-      userNome.innerText = "Olá, " + nomeUsuario;
+    db.ref("usuarios/" + uid + "/nome").once("value").then(s => {
+      nomeUsuario = s.val();
+      userNome.innerText = nomeUsuario + " (online)";
     });
 
-    carregarMensagens();
+    db.ref("usuarios/" + uid + "/online").set(true);
     carregarAmigos();
   }
 });
 
 // SAIR
 function sair() {
+  db.ref("usuarios/" + uid + "/online").set(false);
   auth.signOut().then(() => location.reload());
 }
 
-// ENVIAR MENSAGEM COM HORÁRIO
-function enviar() {
-  if (msg.value === "") return;
-
-  const agora = new Date();
-  const hora = agora.getHours().toString().padStart(2, "0");
-  const minuto = agora.getMinutes().toString().padStart(2, "0");
-
-  db.ref("mensagens").push({
-    user: nomeUsuario,
-    texto: msg.value,
-    hora: `${hora}:${minuto}`
+// AMIGOS
+function carregarAmigos() {
+  listaAmigos.innerHTML = "";
+  db.ref("amigos/" + uid).on("child_added", s => {
+    let email = s.val();
+    let div = document.createElement("div");
+    div.className = "friend";
+    div.innerText = email;
+    div.onclick = () => abrirChat(email);
+    listaAmigos.appendChild(div);
   });
-
-  msg.value = "";
 }
 
-// CARREGAR MENSAGENS
-function carregarMensagens() {
+// CHAT PRIVADO
+function abrirChat(email) {
+  amigoEmail = email;
+  chatId = uid < email ? uid + "_" + email : email + "_" + uid;
+  tituloChat.innerText = "Chat com " + email;
   mensagens.innerHTML = "";
-  db.ref("mensagens").on("child_added", s => {
+
+  db.ref("chats/" + chatId).off();
+  db.ref("chats/" + chatId).on("child_added", s => {
     let m = s.val();
     mensagens.innerHTML += `
       <div class="msg">
@@ -199,18 +198,35 @@ function carregarMensagens() {
   });
 }
 
-// AMIGOS
-function addAmigo() {
-  if (emailAmigo.value === "") return;
-  db.ref("amigos/" + uid).push(emailAmigo.value);
-  emailAmigo.value = "";
+// DIGITANDO
+function digitando() {
+  if (!chatId) return;
+  db.ref("digitando/" + chatId).set(nomeUsuario);
+  setTimeout(() => db.ref("digitando/" + chatId).remove(), 1000);
 }
 
-function carregarAmigos() {
-  listaAmigos.innerHTML = "";
-  db.ref("amigos/" + uid).on("child_added", s => {
-    listaAmigos.innerHTML += `<div class="friend">${s.val()}</div>`;
+db.ref("digitando").on("value", s => {
+  if (s.exists()) {
+    statusAmigo.innerText = "digitando...";
+  } else {
+    statusAmigo.innerText = "";
+  }
+});
+
+// ENVIAR
+function enviar() {
+  if (!msg.value || !chatId) return;
+  let d = new Date();
+  let h = d.getHours().toString().padStart(2, "0");
+  let m = d.getMinutes().toString().padStart(2, "0");
+
+  db.ref("chats/" + chatId).push({
+    user: nomeUsuario,
+    texto: msg.value,
+    hora: `${h}:${m}`
   });
+
+  msg.value = "";
 }
 </script>
 
